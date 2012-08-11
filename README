@@ -1,0 +1,42 @@
+SNP Swapper
+
+This script reconstructs the base sequence using a base reference sequence in FASTA format, and a SNP loci file and indel file
+produced by prephix.  It then does substituting, inserting, or deleting of the base sequence bases at the given locations in
+the provided reference base sequence. It writes out a separate regenerated base sequence for each strain in the SNP input file.
+
+The output is suitable for use by mlstar (i.e. is a FASTA formatted reference base sequence).
+
+The reference base sequence input file should be in FASTA format.  It is assumed to to start at loci 1 with the first base.
+
+The SNP file input should contain three TAB-delimited columns and no headers:
+SNP_ID (i.e. strain id) [TAB] Base position [TAB] Base
+
+So something like:
+A12 1045  G
+A12 4056  A
+A12 13004 T
+A35 4 A
+A35 401 C
+
+This is the same format of the snp files produced by the prephix program.
+
+The indel input file is in the format  produced by the prephix program and contain modified VAAL4 K28 and NUCMER lines.
+The modification include strain ID and either k28 or nuc is in the first and second columns.
+The indel input files have no header files, e.g.:
+
+STRAIN_ID k28 0 316 left=CAGGTATTTGACATATAGAG sample=A ref=G right=ACTGAAAAAGTATAATTGTG
+STRAIN_ID k28 0 419 left=CTGTGCATAACTAATAAGCA sample= ref=ACG right=GATAAAGTTATCCACCGATT
+STRAIN_ID k28 0 929 left=GACACTTTTGTAATCGGACC sample= ref=C right=GGTAACCGCTTTCCACATGC
+STRAIN_ID k28 0 953 left=AACCGCTTTCCACATGCAGC sample=A ref= right=AGTTTAGCTGTGGCCGAAGC
+STRAIN_ID k28 0 965 left=CATGCAGCGAGTTTAGCTGT sample=AAT ref= right=GCCGAAGCACCAGCCAAAGC
+STRAIN_ID k28 0 1013 left=CCATTATTTATCTATGGAGG sample=G ref= right=GTTGGTTTAGGAAAAACCCA
+STRAIN_ID nuc 759437  A G 732302  1 732302  1 1 NC007793  JKD6159
+STRAIN_ID nuc 759441  T A 732306  3 732306  1 1 NC007793  JKD6159
+STRAIN_ID nuc 759444  T C 732309  3 732309  1 1 NC007793  JKD6159
+STRAIN_ID nuc 759456  G A 732321  6 732321  1 1 NC007793  JKD6159
+STRAIN_ID nuc 759462  A T 732327  6 732327  1 1 NC007793  JKD6159
+STRAIN_ID nuc 759504  A G 732369  36  732369  1 1 NC007793  JKD6159
+STRAIN_ID nuc 759540  T C 732405  15  732405  1 1 NC007793  JKD6159
+
+Usage: $0 <reference base file> <prephix SNP loci input file> [prephix indel file]
+
