@@ -48,7 +48,7 @@
 
 use strict;
 
-my $VERSION="2.1 Rev 1";
+my $VERSION="2.2";
 
 print "\nSNP Swapper v$VERSION\n\n";
 
@@ -131,7 +131,7 @@ while (<$reffile>){
 	}
 
 	# The rest of the file should be lines of base sequences
-	if (/^[AGCT]+$/){
+	if (/^[AGCTagct]+$/){
     # Split into individual bases and load into reference has table, using auto-incremented counter as loci.
     my $refBase;
     foreach $refBase (split(//)){
@@ -158,7 +158,8 @@ while (<$snpfile>){
 
   chomp;
 
-  if (!(/^(\S+)\t(\d+)\t([A-Z]+)$/)){
+
+  if (!(/^(\S+)\t(\d+)\t([A-Za-z]+)$/) && (!/(\S+)\t-1\t-$/)){
     print_all("*** ERROR: Bad data format on line $i of SNP loci file.  Expect three columns [Strain ID (Alphanumeric)] [Loci (Numeric)] [Base (alphabetic)]\nGot \"$_\" instead.\n");
 		print "Failed.\n";
     exit 1;
@@ -217,7 +218,7 @@ while (<$snpfile>){
 						# Regex note:
 						#
 						# With indels, either sample= or ref= may have no value, so match for [ATCG] and check for length 1.
-						if (/^\S+\s+k28\s+[0-9]+\s+([0-9]+)\s+left=[ATCG]*\s+sample=([ATCG]*)\s+ref=([ATCG]*)\s+right=[ATCG]*$/){
+						if (/^\S+\s+k28\s+[0-9]+\s+([0-9]+)\s+left=[ATCGatcg]*\s+sample=([ATCGatcg]*)\s+ref=([ATCGatcg]*)\s+right=[ATCGatcg]*$/){
 							$realLoci=$1;
 							$realLoci += $loci_offset; # VAAL k28.out file loci is offset by +1.
 
@@ -272,7 +273,7 @@ while (<$snpfile>){
 						# Only care about the P1 (ref base loci), the first [SUB] which is the ref base at that loci,
 						# and the second [SUB] which is the SNP base at that loci.
 						#
-						if (/^\S+\s+nuc\s+([0-9]+)\s+([ATCG]*)\s+([ATCG]*)\s+.+$/){
+						if (/^\S+\s+nuc\s+([0-9]+)\s+([ATCGatcg]*)\s+([ATCGatcg]*)\s+.+$/){
 							$realLoci=$1;
 
 							# If [SUB2] is something and [SUB1] is nothing, then this is an insert, so insert the ref base sequence at the given loci.
@@ -352,14 +353,21 @@ while (<$snpfile>){
     $i = 1;
 		$currentStrain=$in_strain;
 	}
-	
-  if ($outputTable{$in_loci}[1] ne "not_modified"){
-    print_all("*** WARNING: Encountered SNP loci $in_loci, which is already modified in base ref sequence! (line $i of SNP input file) Skipping...\n");
-    $warnings++;
-  }
-  else{
-		$outputTable{$in_loci} = [$in_base,"modified"];
-  }
+	# If this is an empty SNP file (in the sense that it has just one line with "strainid	-1	-" indicating no snps in the strain),
+	# just use the reference seq.
+	if (/(\S+)\t-1\t-$/){
+		print_debug("Found empty strain $in_strain, $in_loci, $in_base\n");
+		# Dump out the unmodified base ref sequence in FASTA (since no SNPs for this strain) format.
+	}
+  else{	
+		if ($outputTable{$in_loci}[1] ne "not_modified"){
+			print_all("*** WARNING: Encountered SNP loci $in_loci, which is already modified in base ref sequence! (line $i of SNP input file) Skipping...\n");
+			$warnings++;
+		}
+		else{
+			$outputTable{$in_loci} = [$in_base,"modified"];
+		}
+	}
 }
 
 # Process any indels for the final strain.
@@ -404,7 +412,7 @@ if ($indelFilename ne ""){
 				# Regex note:
 				#
 				# With indels, either sample= or ref= may have no value, so match for [ATCG] and check for length 1.
-				if (/^\S+\s+k28\s+[0-9]+\s+([0-9]+)\s+left=[ATCG]*\s+sample=([ATCG]*)\s+ref=([ATCG]*)\s+right=[ATCG]*$/){
+				if (/^\S+\s+k28\s+[0-9]+\s+([0-9]+)\s+left=[ATCGatcg]*\s+sample=([ATCGatcg]*)\s+ref=([ATCGatcg]*)\s+right=[ATCGatcg]*$/){
 					$realLoci=$1;
 					$realLoci += $loci_offset; # VAAL k28.out file loci is offset by +1, prephix indel file loci offset is 0.
 
@@ -459,7 +467,7 @@ if ($indelFilename ne ""){
 				# Only care about the P1 (ref base loci), the first [SUB] which is the ref base at that loci,
 				# and the second [SUB] which is the SNP base at that loci.
 				#
-				if (/^\S+\s+nuc\s+([0-9]+)\s+([ATCG]*)\s+([ATCG]*)\s+.+$/){
+				if (/^\S+\s+nuc\s+([0-9]+)\s+([ATCGatcg]*)\s+([ATCGatcg]*)\s+.+$/){
 					$realLoci=$1;
 
 					# If [SUB2] is something and [SUB1] is nothing, then this is an insert, so insert the ref base sequence at the given loci.
