@@ -21,7 +21,7 @@ A35 401 C
 This is the same format of the snp files produced by the prephix program.
 
 The indel input file is in the format  produced by the prephix program and contain modified VAAL4 K28 and NUCMER lines.
-The modification include strain ID and either k28 or nuc is in the first and second columns.
+The modification include strain ID and either k28, nuc, or vcf is in the first and second columns.
 The indel input files have no header files, e.g.:
 
 STRAIN_ID k28 0 316 left=CAGGTATTTGACATATAGAG sample=A ref=G right=ACTGAAAAAGTATAATTGTG
@@ -37,6 +37,11 @@ STRAIN_ID nuc 759456  G A 732321  6 732321  1 1 NC007793  JKD6159
 STRAIN_ID nuc 759462  A T 732327  6 732327  1 1 NC007793  JKD6159
 STRAIN_ID nuc 759504  A G 732369  36  732369  1 1 NC007793  JKD6159
 STRAIN_ID nuc 759540  T C 732405  15  732405  1 1 NC007793  JKD6159
+STRAIN_ID vcf NZ_CP014696.2   17  .   C       CT      3218.2  .       AC=1;AF=1;LEN=1;TYPE=ins        GT      1       INS
+STRAIN_ID vcf NZ_CP014696.2   18  .   CG      C       1959.23 .       AC=1;AF=1;LEN=1;TYPE=del        GT      1       DEL
+STRAIN_ID vcf NZ_CP014696.2   19  .   A       AGCGCCTT        1049.14 .       AC=1;AF=1;LEN=7;TYPE=ins        GT      1       INS
+STRAIN_ID vcf NZ_CP014696.2   20  .   GGT     G       2246.71 .       AC=1;AF=1;LEN=2;TYPE=del        GT      1       DEL
+STRAIN_ID vcf NZ_CP014696.2   21  .   G       GA      1936.54 .       AC=1;AF=1;LEN=1;TYPE=ins        GT      1       INS
 
 Usage: $0 <reference base file> <prephix SNP loci input file> [prephix indel file]
 

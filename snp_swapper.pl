@@ -22,8 +22,8 @@
 #
 # This is the same format of the snp files produced by the prephix program.
 #
-# The indel input file is in the format  produced by the prephix program and contain modified VAAL4 K28 and NUCMER lines.  
-# The modification include strain ID and either k28 or nuc is in the first and second columns.
+# The indel input file is in the format  produced by the prephix program and contain modified VAAL4, K28, VCF, and NUCMER lines.  
+# The modification include strain ID and either k28, vcf, or nuc is in the first and second columns.
 # The indel input files have no header files, e.g.:
 #
 # STRAIN_ID k28 0 316 left=CAGGTATTTGACATATAGAG sample=A ref=G right=ACTGAAAAAGTATAATTGTG
@@ -39,6 +39,11 @@
 # STRAIN_ID nuc 759462  A T 732327  6 732327  1 1 NC007793  JKD6159
 # STRAIN_ID nuc 759504  A G 732369  36  732369  1 1 NC007793  JKD6159
 # STRAIN_ID nuc 759540  T C 732405  15  732405  1 1 NC007793  JKD6159
+# STRAIN_ID vcf NZ_CP014696.2   17  .   C       CT      3218.2  .       AC=1;AF=1;LEN=1;TYPE=ins        GT      1       INS
+# STRAIN_ID vcf NZ_CP014696.2   18  .   CG      C       1959.23 .       AC=1;AF=1;LEN=1;TYPE=del        GT      1       DEL
+# STRAIN_ID vcf NZ_CP014696.2   19  .   A       AGCGCCTT        1049.14 .       AC=1;AF=1;LEN=7;TYPE=ins        GT      1       INS
+# STRAIN_ID vcf NZ_CP014696.2   20  .   GGT     G       2246.71 .       AC=1;AF=1;LEN=2;TYPE=del        GT      1       DEL
+# STRAIN_ID vcf NZ_CP014696.2   21  .   G       GA      1936.54 .       AC=1;AF=1;LEN=1;TYPE=ins        GT      1       INS
 #
 # Usage: $0 <reference base file> <prephix SNP loci input file> [prephix indel file]
 #
@@ -48,7 +53,7 @@
 
 use strict;
 
-my $VERSION="2.2";
+my $VERSION="2.3";
 
 print "\nSNP Swapper v$VERSION\n\n";
 
@@ -197,7 +202,7 @@ while (<$snpfile>){
 
 				# Get strain ID and line type from current line.  See if it matches the current strain ID.
 				# If not, keep looking.
-				if (/^(.+?)\t(nuc|k28)/){
+				if (/^(.+?)\t(nuc|k28|vcf)/){
 					$indelStrain=$1;
 					$lineType=$2;
 					
@@ -218,7 +223,7 @@ while (<$snpfile>){
 						# Regex note:
 						#
 						# With indels, either sample= or ref= may have no value, so match for [ATCG] and check for length 1.
-						if (/^\S+\s+k28\s+[0-9]+\s+([0-9]+)\s+left=[ATCGatcg]*\s+sample=([ATCGatcg]*)\s+ref=([ATCGatcg]*)\s+right=[ATCGatcg]*$/){
+						if (/^\S+\s+k28\s+[0-9]+\s+([0-9]+)\s+left=[ATCGNatcgn]*\s+sample=([ATCGNatcgn]*)\s+ref=([ATCGNatcgn]*)\s+right=[ATCGNatcgn]*$/){
 							$realLoci=$1;
 							$realLoci += $loci_offset; # VAAL k28.out file loci is offset by +1.
 
@@ -273,7 +278,7 @@ while (<$snpfile>){
 						# Only care about the P1 (ref base loci), the first [SUB] which is the ref base at that loci,
 						# and the second [SUB] which is the SNP base at that loci.
 						#
-						if (/^\S+\s+nuc\s+([0-9]+)\s+([ATCGatcg]*)\s+([ATCGatcg]*)\s+.+$/){
+						if (/^\S+\s+nuc\s+([0-9]+)\s+([ATCGNatcgn]*)\s+([ATCGNatcgn]*)\s+.+$/){
 							$realLoci=$1;
 
 							# If [SUB2] is something and [SUB1] is nothing, then this is an insert, so insert the ref base sequence at the given loci.
@@ -319,6 +324,62 @@ while (<$snpfile>){
 							exit 1;
 						}
 
+					}
+					elsif ($lineType eq "vcf"){
+						print_debug("Line $j appears to be VCF format.\n");
+						$loci_offset=0;
+						# Assuming indel input body data to be in the format:
+						# [strain_id] vcf [CHROM] [Locus] [ID] [REF] [ALT] ... [TYPE=INS|DEL]
+						# Only care about the Locus (ref base loci), the REF which is the ref base at that loci,
+						# and the [ALT] which is the SNP base at that loci.
+						#
+						if (/^\S+\s+vcf\s+\S+\s+([0-9]+)\s+\S+\s+([ATCGNatcgn]*)\s+([ATCGNatcgn]*)\s+.+(INS|DEL)$/){
+							$realLoci=$1;
+
+							# If an insert, insert the snp base sequence at the given loci.
+							if ($4 == 'INS'){
+								print_debug("Inserting $3 at $realLoci\n");
+								if (exists($outputTable{$realLoci})){
+									$outputTable{$realLoci} = ["$outputTable{$realLoci}[0]$3","modified"];
+								}
+								else{
+									$outputTable{$realLoci} = [$3,"modified"];
+								}
+							}
+							# If a deletion, so delete the base at the loci in the ref base
+							# sequence, and the following bases (as many as there are in the deletion sequence in the sample).
+							# I.e. if ref=GGG then need to delete base at the given loci as well as the next two loci.
+							# Then insert the SNP base at that loci to complete the substitution.
+							elsif ($4 == 'DEL'){
+								my $del_count=0;
+								while ($del_count < length($2)){
+									# Sanity check that the deleted sequence does indeed start at this loci (and subsequent loci matches the deleted bases).
+									if ($outputTable{$realLoci + $del_count}[0] ne substr($2,$del_count,1)){
+										print_all("*** ERROR: Encountered indel loci " . ($realLoci + $del_count) . ", for deletion which does not match expected base in ref base! Expected base " . substr($2,$del_count,1) . ", found $outputTable{$realLoci + $del_count}[0] instead. (line $j of indel input file $indelFilename). Aborting...\n");
+										exit 1;
+									}
+									elsif ($outputTable{$realLoci + $del_count}[1] ne "not_modified"){
+										print_all("*** WARNING: Encountered indel loci " . ($realLoci + $del_count) . ", which is already modified in base ref sequence! (line $j of indel input file $indelFilename) Skipping...\n");
+										$warnings++;
+									}
+									else{
+										print_debug("Deleting " . $outputTable{$realLoci + $del_count}[0]  . " at " . ($realLoci + $del_count) . "\n");
+										$outputTable{$realLoci + $del_count} = ["","modified"];
+									}
+									$del_count++;
+								}
+								$outputTable{$realLoci} = ["$3","modified"];
+							}
+							else{
+								print_all("*** ERROR: Indel file line format not recognized. Got \"$_\" at line $j. Can't figure if it is deletion or insertion (substitutions should be defined in the snp file).\n");
+								print "Failed.\n";
+								exit 1;
+							}
+						}
+						else{
+							print_all("*** ERROR: Bad VCF indel line format! $_\n");
+							exit 1;
+						}
 					}
 					else{
 						print_all("Cannot determine type of indel line: $_ (in $indelFilename, line $j)\n");
@@ -392,7 +453,7 @@ if ($indelFilename ne ""){
 
 		# Get strain ID and line type from current line.  See if it matches the current strain ID.
 		# If not, keep looking.
-		if (/^(.+?)\t(nuc|k28)/){
+		if (/^(.+?)\t(nuc|k28|vcf)/){
 			$indelStrain=$1;
 			$lineType=$2;
 			
@@ -412,7 +473,7 @@ if ($indelFilename ne ""){
 				# Regex note:
 				#
 				# With indels, either sample= or ref= may have no value, so match for [ATCG] and check for length 1.
-				if (/^\S+\s+k28\s+[0-9]+\s+([0-9]+)\s+left=[ATCGatcg]*\s+sample=([ATCGatcg]*)\s+ref=([ATCGatcg]*)\s+right=[ATCGatcg]*$/){
+				if (/^\S+\s+k28\s+[0-9]+\s+([0-9]+)\s+left=[ATCGNatcgn]*\s+sample=([ATCGNatcgn]*)\s+ref=([ATCGNatcgn]*)\s+right=[ATCGNatcgn]*$/){
 					$realLoci=$1;
 					$realLoci += $loci_offset; # VAAL k28.out file loci is offset by +1, prephix indel file loci offset is 0.
 
@@ -467,7 +528,7 @@ if ($indelFilename ne ""){
 				# Only care about the P1 (ref base loci), the first [SUB] which is the ref base at that loci,
 				# and the second [SUB] which is the SNP base at that loci.
 				#
-				if (/^\S+\s+nuc\s+([0-9]+)\s+([ATCGatcg]*)\s+([ATCGatcg]*)\s+.+$/){
+				if (/^\S+\s+nuc\s+([0-9]+)\s+([ATCGNatcgn]*)\s+([ATCGNatcgn]*)\s+.+$/){
 					$realLoci=$1;
 
 					# If [SUB2] is something and [SUB1] is nothing, then this is an insert, so insert the ref base sequence at the given loci.
@@ -513,6 +574,62 @@ if ($indelFilename ne ""){
 					exit 1;
 				}
 
+			}
+			elsif ($lineType eq "vcf"){
+				print_debug("Line $j appears to be VCF format.\n");
+				$loci_offset=0;
+				# Assuming indel input body data to be in the format:
+				# [strain_id] vcf [CHROM] [Locus] [ID] [REF] [ALT] ... [TYPE=INS|DEL]
+				# Only care about the Locus (ref base loci), the REF which is the ref base at that loci,
+				# and the [ALT] which is the SNP base at that loci.
+				#
+				if (/^\S+\s+vcf\s+\S+\s+([0-9]+)\s+\S+\s+([ATCGNatcgn]*)\s+([ATCGNatcgn]*)\s+.+(INS|DEL)$/){
+					$realLoci=$1;
+
+					# If an insert, insert the snp base sequence at the given loci.
+					if ($4 == 'INS'){
+						print_debug("Inserting $3 at $realLoci\n");
+						if (exists($outputTable{$realLoci})){
+							$outputTable{$realLoci} = ["$outputTable{$realLoci}[0]$3","modified"];
+						}
+						else{
+							$outputTable{$realLoci} = [$3,"modified"];
+						}
+					}
+					# If a deletion, so delete the base at the loci in the ref base
+					# sequence, and the following bases (as many as there are in the deletion sequence in the sample).
+					# I.e. if ref=GGG then need to delete base at the given loci as well as the next two loci.
+					# Then insert the SNP base at that loci to complete the substitution.
+					elsif ($4 == 'DEL'){
+						my $del_count=0;
+						while ($del_count < length($2)){
+							# Sanity check that the deleted sequence does indeed start at this loci (and subsequent loci matches the deleted bases).
+							if ($outputTable{$realLoci + $del_count}[0] ne substr($2,$del_count,1)){
+								print_all("*** ERROR: Encountered indel loci " . ($realLoci + $del_count) . ", for deletion which does not match expected base in ref base! Expected base " . substr($2,$del_count,1) . ", found $outputTable{$realLoci + $del_count}[0] instead. (line $j of indel input file $indelFilename). Aborting...\n");
+								exit 1;
+							}
+							elsif ($outputTable{$realLoci + $del_count}[1] ne "not_modified"){
+								print_all("*** WARNING: Encountered indel loci " . ($realLoci + $del_count) . ", which is already modified in base ref sequence! (line $j of indel input file $indelFilename) Skipping...\n");
+								$warnings++;
+							}
+							else{
+								print_debug("Deleting " . $outputTable{$realLoci + $del_count}[0]  . " at " . ($realLoci + $del_count) . "\n");
+								$outputTable{$realLoci + $del_count} = ["","modified"];
+							}
+							$del_count++;
+						}
+						$outputTable{$realLoci} = ["$3","modified"];
+					}
+					else{
+						print_all("*** ERROR: Indel file line format not recognized. Got \"$_\" at line $j. Can't figure if it is deletion or insertion (substitutions should be defined in the snp file).\n");
+						print "Failed.\n";
+						exit 1;
+					}
+				}
+				else{
+					print_all("*** ERROR: Bad VCF indel line format! $_\n");
+					exit 1;
+				}
 			}
 			else{
 				print_all("Cannot determine type of indel line: $_ (in $indelFilename, line $j)\n");
